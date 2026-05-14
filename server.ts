@@ -1,10 +1,9 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
-import { fileURLToPath } from "url";
 import Groq from "groq-sdk";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __dirname = path.resolve();
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
