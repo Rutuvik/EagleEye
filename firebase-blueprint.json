@@ -1,0 +1,159 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information and preferences",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email"]
+    },
+    "Analysis": {
+      "title": "Analysis",
+      "description": "Amazon growth strategy analysis record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "toolType": { "type": "string" },
+        "inputData": {
+          "type": "object",
+          "properties": {
+            "myListing": { "$ref": "#/entities/ListingData" },
+            "competitors": { "type": "array", "items": { "$ref": "#/entities/ListingData" } },
+            "currentKeywords": { "type": "string" },
+            "additionalGoals": { "type": "string" },
+            "uploadedKeywords": { "type": "string" }
+          }
+        },
+        "resultMarkdown": { "type": "string" },
+        "optimizedListing": { "$ref": "#/entities/OptimizedListing" },
+        "competitorResearch": { "$ref": "#/entities/CompetitorResearch" },
+        "visualAudit": { "$ref": "#/entities/VisualAudit" },
+        "chatHistory": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["user", "model"] },
+              "text": { "type": "string" }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "toolType", "createdAt"]
+    },
+    "ListingData": {
+      "title": "Listing Data",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "title": { "type": "string" },
+        "copy": { "type": "string" },
+        "price": { "type": "string" },
+        "discountedPrice": { "type": "string" },
+        "reviews": { "type": "string" },
+        "focusedFeatures": { "type": "string" }
+      }
+    },
+    "OptimizedListing": {
+      "title": "Optimized Listing",
+      "type": "object",
+      "properties": {
+        "titles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "score": { "type": "number" }
+            }
+          }
+        },
+        "bulletPoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": { "type": "string" },
+              "score": { "type": "number" }
+            }
+          }
+        },
+        "description": { "type": "string" },
+        "searchTerms": { "type": "string" },
+        "overallListingScore": { "type": "number" },
+        "keywordRationale": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "term": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "CompetitorResearch": {
+      "title": "Competitor Research",
+      "type": "object",
+      "properties": {
+        "listingScore": { "type": "number" },
+        "pros": { "type": "array", "items": { "type": "string" } },
+        "cons": { "type": "array", "items": { "type": "string" } },
+        "keywordStrategy": { "type": "string" },
+        "keywordAnalysis": {
+          "type": "object",
+          "properties": {
+            "good": { "type": "array", "items": { "type": "string" } },
+            "bad": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "conversionTactics": { "type": "string" },
+        "visualAudit": { "type": "string" },
+        "vulnerabilities": { "type": "string" }
+      }
+    },
+    "VisualAudit": {
+      "title": "Visual Audit",
+      "type": "object",
+      "properties": {
+        "myVisualStrategy": { "type": "string" },
+        "competitorVisualStrategy": { "type": "string" },
+        "gapAnalysis": { "type": "string" },
+        "imageOptimizationPlan": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "imageNumber": { "type": "number" },
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "whyItWins": { "type": "string" },
+              "generationPrompt": { "type": "string" }
+            }
+          }
+        },
+        "conversionTriggers": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profile document"
+    },
+    "analyses/{analysisId}": {
+      "schema": "Analysis",
+      "description": "Contains analysis reports and chat history"
+    }
+  }
+}

@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Connection Test ---
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // --- Validation Blueprints ---
+
+    function isValidUser(data) {
+      return data.userId == request.auth.uid
+        && data.email is string && data.email.size() <= 256
+        && (data.get('displayName', '') is string || data.get('displayName', '') == null)
+        && (data.get('photoURL', '') is string || data.get('photoURL', '') == null)
+        && data.keys().hasAll(['userId', 'email', 'updatedAt'])
+        && data.keys().size() >= 3 && data.keys().size() <= 7;
+    }
+
+    function isValidAnalysis(data) {
+      return data.userId == request.auth.uid
+        && data.toolType in ['listing_optimization', 'new_listing', 'comp_analysis', 'industry_analysis', 'brand_story', 'keyword_research', 'visual_brief']
+        && (data.get('resultMarkdown', '') is string && data.get('resultMarkdown', '').size() <= 1048576) // 1MB
+        && (data.get('chatHistory', []).size() <= 50)
+        && (data.get('additionalGoals', '') is string && data.get('additionalGoals', '').size() <= 2000)
+        && (data.get('currentKeywords', '') is string && data.get('currentKeywords', '').size() <= 2000)
+        && (data.get('uploadedKeywords', '') is string && data.get('uploadedKeywords', '').size() <= 100000)
+        && data.keys().hasAll(['userId', 'toolType', 'createdAt', 'updatedAt'])
+        && data.keys().size() <= 15;
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isOwner(userId) && isValidUser(incoming()) 
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt'])
+        && incoming().updatedAt == request.time
+        && incoming().userId == existing().userId;
+    }
+
+    match /analyses/{analysisId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() 
+        && isValidId(analysisId) 
+        && isValidAnalysis(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+
+      allow update: if isSignedIn() 
+        && resource.data.userId == request.auth.uid
+        && isValidAnalysis(incoming())
+        && incoming().diff(existing()).affectedKeys().hasAny(['resultMarkdown', 'chatHistory', 'optimizedListing', 'competitorResearch', 'visualAudit', 'updatedAt'])
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
