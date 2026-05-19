@@ -31,7 +31,10 @@ import {
   Clock,
   History,
   Trash2,
-  X
+  X,
+  PieChart,
+  Activity,
+  Award
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
@@ -45,7 +48,7 @@ import AuthPage from "./components/AuthPage";
 import { auth, db } from "./services/firebase";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc, setDoc, serverTimestamp, getDocFromServer } from "firebase/firestore";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { 
   saveAnalysis, 
   getAnalyses, 
@@ -53,6 +56,71 @@ import {
   updateAnalysis, 
   type AnalysisRecord 
 } from "./services/analysisService";
+
+
+// Market Intelligence Component
+const MarketPulse = () => {
+  const trends = useMemo(() => [
+    { label: "Category CPC Shift", value: "+12.4%", status: "up", desc: "Average CPC in Home & Kitchen seeing high volatility due to seasonal transitions." },
+    { label: "Review Sentiment Avg", value: "4.2", status: "neutral", desc: "Customer expectations for 'Sustainability' mentions in listings up by 34% since Q1." },
+    { label: "BSR Velocity Threshold", value: "Low", status: "down", desc: "Top 100 ranking in Bedding now requires 22% fewer daily sales compared to last month." },
+    { label: "Visual Asset Impact", value: "Extreme", status: "up", desc: "Listings with lifestyle-first hero images showing 18% higher CTR in mobile search." }
+  ], []);
+
+  const insights = [
+    "Amazon's A10 algorithm is increasingly prioritizing 'External Traffic' signals for keyword ranking.",
+    "Brand Story (A+ Content) adoption has hit 82% among top-tier sellers in your niche.",
+    "Video Infographics are outperforming static comparison charts in conversion tests for mid-range electronics.",
+    "Prime Day early-bird strategy should focus on 'Defensive Targeting' of your own brand terms."
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-blue-600" />
+          <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Global Market Pulse</h3>
+        </div>
+        <span className="text-[8px] font-bold text-blue-600 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+          Live Indices
+        </span>
+      </div>
+      
+      <div className="grid grid-cols-1 gap-4">
+        {trends.map((trend, i) => (
+          <div key={`market-trend-${trend.label}-${i}`} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 group hover:bg-white hover:border-blue-300 transition-all">
+            <div className="flex justify-between items-start">
+              <span className="text-[10px] font-bold text-slate-500">{trend.label}</span>
+              <span className={cn(
+                "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                trend.status === "up" ? "bg-green-100 text-green-700" : trend.status === "down" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-700"
+              )}>
+                {trend.value}
+              </span>
+            </div>
+            <p className="text-[9px] text-slate-400 font-medium leading-relaxed">{trend.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-5 bg-blue-900 text-white rounded-3xl space-y-4 shadow-xl shadow-blue-900/20">
+        <div className="flex items-center gap-2">
+          <Award className="w-4 h-4 text-blue-400" />
+          <h4 className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Strategic Intel</h4>
+        </div>
+        <div className="space-y-3">
+          {insights.map((text, i) => (
+            <div key={`market-intel-${text.substring(0, 15).replace(/\s+/g, '-')}-${i}`} className="flex gap-3 items-start group">
+              <div className="mt-1 w-1 h-1 rounded-full bg-blue-400 flex-shrink-0 group-hover:scale-150 transition-transform" />
+              <p className="text-[10px] font-medium leading-relaxed text-blue-100">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
 // Set worker for pdfjs
@@ -259,12 +327,13 @@ export default function App() {
 
     try {
       const response = await chatWithAnalysis(prevHistory, userMessage);
-      const newMessages = [...chatMessages, { role: "user" as const, text: userMessage }, { role: "model" as const, text: response }];
-      setChatMessages(newMessages);
+      setChatMessages(prev => [...prev, { role: "model" as const, text: response }]);
       
       // Update in Firestore if analysis exists
       if (selectedAnalysisId) {
-        updateAnalysis(selectedAnalysisId, { chatHistory: newMessages });
+        updateAnalysis(selectedAnalysisId, { 
+          chatHistory: [...chatMessages, { role: "user" as const, text: userMessage }, { role: "model" as const, text: response }] 
+        });
       }
     } catch (err: any) {
       setError(err.message || "Failed to get chat response.");
@@ -283,34 +352,34 @@ export default function App() {
 
   const handleSampleData = () => {
     setMyUrl("https://www.amazon.com/dp/B08N5KWB9H");
-    setMyTitle("Apple MacBook Air Laptop: Apple M1 Chip, 13” Retina Display, 8GB RAM, 256GB SSD Storage, Backlit Keyboard, FaceTime HD Camera, Touch ID. Works with iPhone/iPad; Space Gray");
-    setMyCopy("STUNNING DISPLAY – With a 13.3-inch Retina display, images come alive with new levels of realism. Text is sharp and clear, and colors are more vibrant.\nPOWERFUL PERFORMANCE – Take on everything from professional-quality editing to action-packed gaming with ease. The Apple M1 chip with an 8-core CPU delivers up to 3.5x faster performance than the previous generation while using way less power.\nSUPERFAST MEMORY – 8GB of unified memory makes your entire system speedy and responsive. That way it can support tasks like memory-hogging multitab browsing and opening a huge graphic file quickly and easily.");
-    setMyPrice("$999.00");
-    setMyDiscount("$899.00");
-    setMyReviews("Most users love the battery life but some complain about the webcam quality.");
-    setMyFocusedFeatures("Ultra-thin design, M1 chip efficiency, All-day battery life (18 hours)");
+    setMyTitle("Organic Bamboo Bed Sheets - 100% Pure Cooling Bamboo Viscose, 4-Piece Sheet Set, Deep Pocket up to 16\", Breathable & Silky Soft, Hypoallergenic (Queen, Cloud Grey)");
+    setMyCopy("🌿 100% PURE BAMBOO VISCOSE: Crafted from sustainably sourced bamboo, our sheets offer a luxury feel that is significantly softer and more breathable than even the highest thread count Egyptian cotton.\n❄️ NATURAL COOLING TECHNOLOGY: Bamboo's moisture-wicking properties keep you cool in the summer and warm in the winter. Perfect for hot sleepers who struggle with night sweats.\n☁️ BUTTERY SOFT & SILKY: Experience the 'cloud-like' comfort. Our sateen weave provides a silky smooth finish that gets softer with every wash while remaining durable and pilling-resistant.\n✅ PERFECT FIT: Queen set includes 1 flat sheet (90\"x102\"), 1 fitted sheet (60\"x80\"), and 2 pillowcases (20\"x30\"). The fitted sheet features deep pockets and a strong elastic fit for mattresses up to 16 inches.");
+    setMyPrice("$89.99");
+    setMyDiscount("$67.50");
+    setMyReviews("Customers love the softness and cooling effect, but some mention they wrinkle easily if not taken out of the dryer immediately. Rating: 4.6/5 stars with 12,450 reviews.");
+    setMyFocusedFeatures("Eco-friendly material, OEKO-TEX certified, deep-pocket design, thermal regulation for hot sleepers.");
     
     setCompetitors([
       {
-        url: "https://www.amazon.com/dp/B0BSHF7WHW",
-        title: "ASUS Vivobook 16 Laptop, 16” WUXGA Display, Intel Core i7-1255U CPU, 16GB RAM, 512GB SSD, Windows 11 Home, Indie Black",
-        copy: "16” WUXGA (1920 x 1200) 16:10 aspect ratio display with ultra-slim NanoEdge bezels. Latest Intel Core i7-1255U Processor 1.7 GHz (12M Cache, up to 4.7 GHz, 10 cores) and Intel Iris Xe Graphics. Fast storage and memory featuring 512GB M.2 NVMe PCIe 3.0 SSD and 16GB DDR4 RAM, Windows 11 Home.",
-        price: "$749.99",
-        discountedPrice: "$699.00",
-        reviews: "Great screen size, but battery life is significantly shorter than MacBook."
+        url: "https://www.amazon.com/dp/B07N8Z7X5W",
+        title: "Bedsure 100% Bamboo Sheets Set - Queen Size Grey Bamboo Viscose Sheets, Cooling Bed Sheets for Hot Sleepers, 16 Inch Deep Pocket 4 Piece Sheet Sets",
+        copy: "Bedsure bamboo sheets queen size are made of 100% bamboo viscose, providing a cooling and breathable sleeping experience. The fabric is smooth and skin-friendly. Includes deep pocket fitted sheet with 360-degree elastic.",
+        price: "$59.99",
+        discountedPrice: "$45.99",
+        reviews: "High volume seller. Reviews note it's thin compared to premium brands but good for the price. 4.4/5 stars."
       },
       {
         url: "https://www.amazon.com/dp/B0C7S7Y8C9",
-        title: "HP Laptop 15, 15.6” HD Display, Intel Core i3-1215U, 8GB RAM, 256GB SSD, Windows 11 Home in S Mode",
-        copy: "STAY PRODUCTIVE: With a 15.6-inch HD display and a thin and light design, you can take this laptop anywhere. LONG BATTERY LIFE: Go from 0 to 50% charge in approximately 45 minutes with HP Fast Charge.",
-        price: "$499.00",
-        discountedPrice: "$329.00",
-        reviews: "Budget friendly but feels plastic and slow for heavy tasks."
+        title: "Luxome Luxury Sheet Set - 100% Organic Bamboo Viscose, 400 Thread Count, Cooling & Moisture Wicking, Deep Pockets (Queen, Charcoal)",
+        copy: "The highest rated bamboo sheets on the market. Precision crafted for ultimate luxury. 400 thread count ensures weight and durability without sacrificing the cooling benefits of bamboo viscose.",
+        price: "$150.00",
+        discountedPrice: "$135.00",
+        reviews: "Premium positioning. Customers rave about the weight and 'expensive feel'. Very few complaints except for price. 4.8/5 stars."
       }
     ]);
 
-    setCurrentKeywords("macbook, apple laptop, m1 chip");
-    setContext("I want to highlight the battery life more and compare it to Windows laptops.");
+    setCurrentKeywords("bamboo sheets, cooling bed sheets, organic bedding, viscose from bamboo, queen sheet set");
+    setContext("I want to position our brand as 'Quiet Luxury'—better than Bedsure but more accessible than Luxome. Our main USP is the OEKO-TEX certification and the specific Cloud Grey aesthetic.");
   };
 
   const handleAnalyze = async (e: React.FormEvent) => {
@@ -741,9 +810,9 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  history.map((record) => (
+                  history.map((record, idx) => (
                     <button 
-                      key={record.id}
+                      key={`history-record-${record.id}-${idx}`}
                       onClick={() => handleSelectHistory(record)}
                       className={cn(
                         "w-full text-left p-5 rounded-2xl border transition-all space-y-3 group/item relative",
@@ -920,6 +989,18 @@ export default function App() {
                       />
                     </div>
                     {selectedTool !== "new_listing" && selectedTool !== "visual_brief" && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] text-slate-600 font-bold">Amazon Product URL</label>
+                        <input 
+                          type="text" 
+                          placeholder="https://www.amazon.com/dp/..."
+                          className="w-full bg-slate-100 border border-slate-200 rounded-xl p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all placeholder:text-slate-400"
+                          value={myUrl}
+                          onChange={(e) => setMyUrl(e.target.value)}
+                        />
+                      </div>
+                    )}
+                    {selectedTool !== "new_listing" && selectedTool !== "visual_brief" && (
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                           <label className="text-[10px] text-slate-600 font-bold">Price</label>
@@ -975,7 +1056,7 @@ export default function App() {
                             <label className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">My Product Images (Max 10)</label>
                             <div className="grid grid-cols-5 gap-2">
                               {myImages.map((img, i) => (
-                                <div key={`my-upload-${i}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
+                                    <div key={`my-upload-preview-${i}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
                                   <img src={img.preview} alt="Preview" className="w-full h-full object-cover" />
                                   <button 
                                     type="button"
@@ -1000,7 +1081,7 @@ export default function App() {
                             <label className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Comp Images (Optional)</label>
                             <div className="grid grid-cols-5 gap-2">
                               {compImages.map((img, i) => (
-                                <div key={`comp-upload-${i}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
+                                    <div key={`comp-upload-preview-${i}`} className="relative aspect-square rounded-lg overflow-hidden border border-slate-700 group">
                                   <img src={img.preview} alt="Preview" className="w-full h-full object-cover" />
                                   <button 
                                     type="button"
@@ -1162,7 +1243,7 @@ export default function App() {
 
                     <div className="space-y-8 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                       {competitors.map((comp, idx) => (
-                        <div key={`comp-input-${idx}`} className="space-y-5 p-6 bg-white border border-slate-200 rounded-3xl relative group shadow-sm">
+                        <div key={`competitor-input-${comp.title.substring(0, 10).replace(/\s+/g, '-')}-${idx}`} className="space-y-5 p-6 bg-white border border-slate-200 rounded-3xl relative group shadow-sm">
                           <div className="flex justify-between items-center">
                             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Competitor #{idx + 1}</span>
                             {competitors.length > 1 && (
@@ -1184,6 +1265,17 @@ export default function App() {
                               className="w-full bg-slate-100 border border-slate-200 rounded-xl p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all placeholder:text-slate-400"
                               value={comp.title}
                               onChange={(e) => updateCompetitor(idx, "title", e.target.value)}
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] text-slate-900 font-bold">Amazon Product URL</label>
+                            <input 
+                              type="text" 
+                              placeholder="https://www.amazon.com/dp/..."
+                              className="w-full bg-slate-100 border border-slate-200 rounded-xl p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all placeholder:text-slate-400"
+                              value={comp.url}
+                              onChange={(e) => updateCompetitor(idx, "url", e.target.value)}
                             />
                           </div>
                           {selectedTool !== "visual_brief" && (
@@ -1263,16 +1355,22 @@ export default function App() {
           </div>
 
           {/* Status Cards */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm group hover:border-cyan-500/30 transition-all">
-              <TrendingUp className="w-6 h-6 mb-3 text-cyan-600 group-hover:scale-110 transition-transform" />
-              <div className="text-[10px] text-slate-400 font-bold">Growth Mode</div>
-              <div className="text-xl font-bold tracking-tight text-white">Aggressive</div>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm group hover:border-cyan-500/30 transition-all">
+                <TrendingUp className="w-6 h-6 mb-3 text-cyan-600 group-hover:scale-110 transition-transform" />
+                <div className="text-[10px] text-slate-400 font-bold">Growth Mode</div>
+                <div className="text-xl font-bold tracking-tight text-white">Aggressive</div>
+              </div>
+              <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm group hover:border-green-500/30 transition-all">
+                <ShieldCheck className="w-6 h-6 mb-3 text-green-600 group-hover:scale-110 transition-transform" />
+                <div className="text-[10px] text-slate-400 font-bold">Leak Protection</div>
+                <div className="text-xl font-bold tracking-tight text-white">Optimized</div>
+              </div>
             </div>
-            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-sm group hover:border-green-500/30 transition-all">
-              <ShieldCheck className="w-6 h-6 mb-3 text-green-600 group-hover:scale-110 transition-transform" />
-              <div className="text-[10px] text-slate-400 font-bold">Leak Protection</div>
-              <div className="text-xl font-bold tracking-tight text-white">Optimized</div>
+            
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+              <MarketPulse />
             </div>
           </div>
         </section>
@@ -1312,7 +1410,7 @@ export default function App() {
                   <h3 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-600 animate-pulse">Analyzing Market Data</h3>
                   <div className="flex gap-1.5 justify-center">
                     {[1, 2, 3, 4, 5].map(i => (
-                      <div key={`dot-${i}`} className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                      <div key={`loading-dot-${i}`} className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
                     ))}
                   </div>
                 </div>
@@ -1323,7 +1421,7 @@ export default function App() {
                     "Consumer Psychology Mapping",
                     "Growth Strategy Modeling"
                   ].map((task, i) => (
-                    <div key={`task-${i}`} className="flex items-center gap-3 text-[10px] text-slate-500 font-medium">
+                    <div key={`loading-task-${i}`} className="flex items-center gap-3 text-[10px] text-slate-500 font-medium">
                       <div className="w-2 h-2 bg-blue-600/40 rounded-full animate-pulse" />
                       {task}
                     </div>
@@ -1398,7 +1496,7 @@ export default function App() {
                       
                       <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                         {chatMessages.map((msg, i) => (
-                          <div key={`chat-msg-${i}`} className={cn(
+                          <div key={`chat-msg-${msg.role}-${i}`} className={cn(
                             "flex flex-col space-y-1",
                             msg.role === "user" ? "items-end" : "items-start"
                           )}>
@@ -1456,9 +1554,10 @@ export default function App() {
                           
                           {competitors.map((comp, idx) => {
                             if (!comp.url || !comp.title) return null;
+                            const uniqueKey = `btn-gen-research-opt-${comp.title.substring(0, 10).replace(/\s+/g, '-')}-${idx}`;
                             return (
                               <button 
-                                key={`gen-opt-comp-${idx}`}
+                                key={uniqueKey}
                                 onClick={() => handleGenerateResearch(idx)}
                                 disabled={isGeneratingResearch}
                                 className="bg-slate-900 border border-slate-800 text-slate-400 px-6 py-3 rounded-xl font-bold text-[10px] flex items-center gap-2 hover:bg-slate-800 transition-all disabled:opacity-50"
@@ -1475,9 +1574,10 @@ export default function App() {
                       <div className="mt-8 pt-8 border-t border-slate-800 flex flex-wrap justify-center gap-4">
                         {competitors.map((comp, idx) => {
                           if (!comp.url || !comp.title) return null;
+                          const uniqueKey = `btn-gen-research-default-${comp.title.substring(0, 10).replace(/\s+/g, '-')}-${idx}`;
                           return (
                             <button 
-                              key={`gen-res-comp-${idx}`}
+                              key={uniqueKey}
                               onClick={() => handleGenerateResearch(idx)}
                               disabled={isGeneratingResearch}
                               className="bg-slate-800 border border-slate-700 text-slate-300 px-6 py-3 rounded-xl font-bold text-[10px] flex items-center gap-2 hover:bg-slate-700 transition-all disabled:opacity-50"
@@ -1524,7 +1624,7 @@ export default function App() {
                                 </div>
                                 <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
                                   {myImages.map((img, i) => (
-                                    <div key={`my-result-${i}`} className="relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border border-slate-700 group">
+                                    <div key={`my-result-preview-${i}`} className="relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border border-slate-700 group">
                                       <img src={img.preview} alt="Preview" className="w-full h-full object-cover" />
                                       <button onClick={() => removeImage(i, 'my')} className="absolute top-0.5 right-0.5 p-0.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                                         <XCircle className="w-2.5 h-2.5" />
@@ -1532,7 +1632,7 @@ export default function App() {
                                     </div>
                                   ))}
                                   {compImages.map((img, i) => (
-                                    <div key={`comp-result-${i}`} className="relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border border-purple-900/50 group">
+                                    <div key={`comp-result-preview-${i}`} className="relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border border-purple-900/50 group">
                                       <img src={img.preview} alt="Preview" className="w-full h-full object-cover" />
                                       <button onClick={() => removeImage(i, 'comp')} className="absolute top-0.5 right-0.5 p-0.5 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                                         <XCircle className="w-2.5 h-2.5" />
@@ -1602,7 +1702,7 @@ export default function App() {
                           </h4>
                           <ul className="space-y-2">
                             {competitorResearch.pros.map((pro, idx) => (
-                              <li key={`pro-${idx}`} className="text-sm flex gap-2 text-slate-400">
+                              <li key={`research-pro-${idx}`} className="text-sm flex gap-2 text-slate-400">
                                 <span className="text-green-500 font-bold">•</span>
                                 {pro}
                               </li>
@@ -1617,7 +1717,7 @@ export default function App() {
                           </h4>
                           <ul className="space-y-2">
                             {competitorResearch.cons.map((con, idx) => (
-                              <li key={`con-${idx}`} className="text-sm flex gap-2 text-slate-400">
+                              <li key={`research-con-${idx}`} className="text-sm flex gap-2 text-slate-400">
                                 <span className="text-red-500 font-bold">•</span>
                                 {con}
                               </li>
@@ -1661,7 +1761,7 @@ export default function App() {
                           </h4>
                           <div className="flex flex-wrap gap-2">
                             {competitorResearch.keywordAnalysis.good.map((kw, i) => (
-                              <span key={`kw-good-${i}`} className="px-2 py-1 bg-green-900/30 border border-green-800 rounded text-[10px] text-green-400 font-medium">
+                              <span key={`kw-good-${kw.replace(/\s+/g, '-')}-${i}`} className="px-2 py-1 bg-green-900/30 border border-green-800 rounded text-[10px] text-green-400 font-medium">
                                 {kw}
                               </span>
                             ))}
@@ -1674,7 +1774,7 @@ export default function App() {
                           </h4>
                           <div className="flex flex-wrap gap-2">
                             {competitorResearch.keywordAnalysis.bad.map((kw, i) => (
-                              <span key={`kw-bad-${i}`} className="px-2 py-1 bg-red-900/30 border border-red-800 rounded text-[10px] text-red-400 font-medium">
+                              <span key={`kw-bad-${kw.replace(/\s+/g, '-')}-${i}`} className="px-2 py-1 bg-red-900/30 border border-red-800 rounded text-[10px] text-red-400 font-medium">
                                 {kw}
                               </span>
                             ))}
@@ -1733,7 +1833,7 @@ export default function App() {
                         <div className="space-y-3">
                           {optimizedListing.titles.map((title, idx) => (
                             <button
-                              key={`title-opt-${idx}`}
+                              key={`title-option-${title.text.substring(0, 20).replace(/\s+/g, '-')}-${idx}`}
                               onClick={() => setSelectedTitleIndex(idx)}
                               className={cn(
                                 "w-full text-left p-4 rounded-xl border transition-all relative group/item",
@@ -1777,7 +1877,7 @@ export default function App() {
                         <h3 className="text-[10px] font-bold text-blue-600">High-Conversion Bullet Points</h3>
                         <div className="space-y-3">
                           {optimizedListing.bulletPoints.map((bullet, idx) => (
-                            <div key={`bullet-${idx}`} className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-sm flex gap-4 text-slate-300 relative overflow-hidden group">
+                            <div key={`bullet-point-${bullet.text.substring(0, 20).replace(/\s+/g, '-')}-${idx}`} className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-sm flex gap-4 text-slate-300 relative overflow-hidden group">
                               <div 
                                 className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-400/30 group-hover:bg-orange-600 transition-all" 
                                 style={{ height: `${bullet.score}%` }}
@@ -1810,7 +1910,7 @@ export default function App() {
                         <h3 className="text-[10px] font-bold text-orange-600">Keyword Rationale</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {optimizedListing.keywordRationale.map((item, idx) => (
-                            <div key={`rationale-${idx}`} className="bg-slate-800 border border-slate-700 p-4 rounded-xl">
+                            <div key={`keyword-rationale-${item.term.replace(/\s+/g, '-')}-${idx}`} className="bg-slate-800 border border-slate-700 p-4 rounded-xl">
                               <div className="text-xs font-bold text-orange-600 mb-1">{item.term}</div>
                               <p className="text-[11px] opacity-60 leading-relaxed">{item.reason}</p>
                             </div>
@@ -1885,7 +1985,7 @@ export default function App() {
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                           {visualAudit.imageOptimizationPlan.map((img, idx) => (
-                            <div key={`visual-plan-${idx}`} className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden space-y-3 group hover:border-blue-600 transition-all">
+                            <div key={`visual-asset-plan-${img.title.replace(/\s+/g, '-')}-${idx}`} className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden space-y-3 group hover:border-blue-600 transition-all">
                               <div className="aspect-square bg-slate-900 relative">
                                 <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
                                   <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold mb-2">
@@ -1913,7 +2013,7 @@ export default function App() {
                         <h4 className="text-xs font-bold text-green-600 uppercase tracking-widest">Visual Conversion Triggers</h4>
                         <div className="flex flex-wrap gap-2">
                           {visualAudit.conversionTriggers.map((trigger, i) => (
-                            <span key={`trigger-${i}`} className="px-3 py-1.5 bg-green-900/20 border border-green-800/50 rounded-full text-[10px] text-green-400 font-bold">
+                            <span key={`visual-trigger-${i}`} className="px-3 py-1.5 bg-green-900/20 border border-green-800/50 rounded-full text-[10px] text-green-400 font-bold">
                               {trigger}
                             </span>
                           ))}

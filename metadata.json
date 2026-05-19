@@ -1,5 +1,6 @@
 {
   "name": "Remix: Final Eagle Eye 2.0",
   "description": "Advanced Amazon business analyzer and growth strategist using AI to optimize listings, analyze competition, and drive sales.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
