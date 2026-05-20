@@ -226,34 +226,111 @@ export async function analyzeListing(
     directPrompt?: string;
   }
 ): Promise<string> {
-  const prompt = `
-    You are a Senior Amazon Growth Strategist specializing in Market Dominance. 
-    You are performing a DEEP ${toolType.toUpperCase().replace('_', ' ')} audit.
-    STRICT COMPLIANCE: DO NOT include any 'thinking' tags, <think> blocks, or internal reasoning in your output. Start the report immediately. Use data-driven analysis based ON THE PROVIDED INPUT.
+  let prompt = "";
 
-    INPUT DATA:
-    - PRIMARY PRODUCT: ${myListing.title} (Price: ${myListing.price})
-    - COMPETITORS: ${competitorListings.map(c => `${c.title} (Price: ${c.price}, Link: ${c.url})`).join(" | ")}
-    - EXTERNAL CONTEXT: ${additionalGoals || "None provided"}
-    - TARGET KEYWORDS: ${currentKeywords || "Generate from industry standards"}
-    - HELIUM10/RAW DATA: ${uploadedKeywords || "None provided"}
-    
-    ${visualBriefOptions?.brandAesthetic ? `BRAND AESTHETIC: ${visualBriefOptions.brandAesthetic}` : ""}
-    ${visualBriefOptions?.emotionalHook ? `EMOTIONAL HOOK: ${visualBriefOptions.emotionalHook}` : ""}
-    ${visualBriefOptions?.directPrompt ? `SPECIAL USER DIRECTIVE: ${visualBriefOptions.directPrompt}` : ""}
+  if (toolType === "listing_optimization") {
+    prompt = `
+      You are an elite, World-Class Amazon Marketplace Growth Strategist and Conversion SEO Architect.
+      You are performing a highly structured, ultra-dense, and professional DEEP LISTING OPTIMIZATION AUDIT.
+      Your writing style is extremely precise, authoritative, and direct. Provide only actionable insights. 
+      Avoid all preamble, conversational filler, or internal meta-thinking. Generate the report immediately.
 
-    REQUIREMENTS FOR THE OUTPUT (MUST BE HIGH-IMPACT, CONCISE, AND POSSESS AN ELITE PROFESSIONAL TONE):
-    1. EXECUTIVE SUMMARY & GROWTH INSIGHT (Max 150 words): A sharp strategic overview highlighting our core "Growth Gap" vs competitors and our top market opportunity.
-    2. TARGETED COMPETITIVE MATRIX: A clean grid/table comparing us with the top competitors. Analyze Price Positioning, Key USP, Visual conversion assets, and SEO Quality.
-       - CRITICAL: For the "Competitor Link" column, you MUST use the exact, literal URL provided in the input data for that specific competitor. DO NOT modify, shorten, or hallucinate a link structure. If no link is provided for a competitor, use "N/A".
-    3. THE PERSUASION TRIGGER (Max 100 words): A concise profile of the target customer Avatar's core psychological trigger and visceral frustration.
-    4. STRATEGIC KEYWORD ASSIGNMENT: Recommend 8-10 high-value keywords categorized by Search Intent (Acquisition, Browsing, Competitor Conquest) with realistic industry-benchmark search volumes.
-    5. AGILE S.W.O.T ANALYSIS: A crisp, point-by-point deconstruction of Strengths, Weaknesses, Opportunities, and Threats for our listing copy and visuals.
-    6. THE "WINNING FORMULA" 14-DAY ACTION PLAN: Exactly 3-4 highly specific, immediate CRO (Conversion Rate Optimization) action steps.
+      INPUT DATA TO ANALYZE:
+      - PRIMARY PRODUCT: Title: "${myListing.title}" | Price: "${myListing.price}" | Copy: "${myListing.copy || "N/A"}" | Reviews: "${myListing.reviews || "N/A"}"
+      - METADATA / GOALS: "${additionalGoals || "None provided"}"
+      - TARGET KEYWORDS / CURRENT STRATEGY: "${currentKeywords || "Identify from market context"}"
+      - HELIUM10 / RAW DATA: "${uploadedKeywords || "None provided"}"
+      - COMPETITORS: ${competitorListings.map(c => `Title: "${c.title}" | Price: "${c.price}" | Copy: "${c.copy || "N/A"}" | Link: "${c.url || "N/A"}"`).join(" || ")}
 
-    Use strict GFM Markdown. Keep sections concise, high-density, and heavily structured using Bold, Italics, and a neat Table to make it look like an elite, high-value tactical report while remaining token-efficient.
-    BE DIRECT. If data is missing, use expert knowledge and category benchmarks to supply realistic estimates. NEVER use placeholders like "[Insert Data Here]".
-  `;
+      OUTPUT FORMAT COMPLIANCE:
+      Your output must have exactly the following 6 numbered sections, formatted with strict GFM Markdown. Keep each section compact, high-impact, and directly tailored to the user's actual product (do not use generic placeholders; do deep real analysis of the inputs!):
+
+      1. COMPREHENSIVE LISTING AUDIT
+      Conversion Leaks & SEO Blind Spots
+      Provide 4-5 core bulleted evaluations highlighting the primary listing's critical vulnerabilities (e.g., Title Redundancy, Grammar & Professionalism, SEO Keyword Stuffing vs. Indexing, Feature-Benefit Gap, Technical Omissions, etc.). Use 1-2 sharp, punchy sentences per bullet.
+
+      2. COMPETITOR GAP & SENTIMENT ANALYSIS
+      Based on market intelligence for the [insert core product category/niche name] niche.
+      Market Sentiment Analysis
+      - **What Customers Love**: [1-2 concise, high-impact bulleted observations from competitors we can emulate]
+      - **What Customers Hate**: [1-2 concise, high-impact pain points from competitors we can exploit]
+      - **Common Weaknesses**: [1-2 concise bullet points on competitor structural listing/SEO failures]
+      **THE CORE ADVANTAGE: "[INSERT AN IMAGINATIVE PERSUASIVE ADVANTAGE CATEGORY NAME IN ALL CAPS, e.g. THE CULINARY COMMAND CENTER]"**
+      [1-2 sentences on how to reposition this product from selling a basic object to selling an experience/workflow and addressing silent buyer objections.]
+
+      3. INDUSTRY INTELLIGENCE & PSYCHOLOGICAL TRIGGERS
+      **Core Psychological Triggers**
+      Provide 4 distinct, highly relevant psychological triggers for this specific product, following this format:
+      - **[Trigger Name, e.g., Investment Protection/Sanitation/Hygiene/Quiet Luxury/Space Optimization]**: [1 sharp, persuasive sentence explaining the customer's deep psychological tie-in]
+      - **[Trigger Name]**: [1 sharp sentence]
+      - **[Trigger Name]**: [1 sharp sentence]
+      - **[Trigger Name]**: [1 sharp sentence]
+      **High-Level Industry Terms (Authority Signals)**
+      Provide 1-2 industry-specific high-level authority terminology examples (e.g. Soundboard Technology, Ionic Protection, Ceramic Coating, etc.) tailored to the product category, formatted as:
+      - **[Term Name]**: [Brief, high-impact description of the signal/benefit]
+
+      4. KEYWORD INTELLIGENCE (TABULAR ANALYSIS)
+      Generate a clean Markdown table with exactly 10 high-value target keywords. Columns:
+      | KEYWORD | SEARCH VOLUME (EST) | SALES POTENTIAL (EST) | OPPORTUNITY SCORE (1-10) |
+      |---|---|---|---|
+      [Include 10 relevant terms with realistic search volumes and high opportunity scores (8-10).]
+
+      **10-15 "HIDDEN GEM" KEYWORDS (Long-Tail)**
+      Generate a clean Markdown table with 7-8 goldmine long-tail keywords. Columns:
+      | KEYWORD | SEARCH VOLUME (EST) | SALES POTENTIAL (EST) | OPPORTUNITY SCORE (1-10) |
+      |---|---|---|---|
+      [Include 7-8 relevant intent-driven long-tail keywords.]
+
+      **5-7 SEMANTIC TERMS (Relevancy Drivers)**
+      Provide 5-7 semantic relevance qualifiers, formatted as:
+      - **[Semantic Term]** ([Strategic benefit label, e.g. Material Authority, Functional Relevancy, Quality Signal, Category Anchor, Compatibility Term])
+
+      5. PRICING & POSITIONING STRATEGY
+      - **Current Price**: [User's primary product price, e.g., $197]
+      - **Positioning**: [1 concise, elite description of our positioning positioning title, e.g., The "Accessible Premium" Disruptor]
+      - **Strategy**: [1-2 precise sentences contrasting us with high-end premium brands vs budget options]
+      - **Action**: [1-2 sentences on how to justify our price over budgets, concluding with a perfect tagline positioning hook]
+
+      6. THE 100% GROWTH ROADMAP
+      - **Phase 1: Title & Metadata Overhaul (Days 1-3)**:
+        - Rewrite Title: [Provide a 150-180 character optimized title incorporating brand and top high-volume search terms]
+        - Update backend search terms to include highly relevant companion terms.
+      - **Phase 2: Visual & Copy Refinement (Days 4-7)**: [1-2 concise, expert suggestions for images and Infographics]
+      - **Phase 3: Review & Social Proof Generation (Ongoing)**: [1-2 concise, smart techniques to build organic social proof and preempt common product limitations]
+      - **Phase 4: Targeted PPC Expansion (Week 2+)**: [1-2 concise and brilliant exact-match/conquesting campaign angles]
+
+      Keep the entire audit compact, high-denstiy, and exceptionally clear. Every sentence must offer professional value. Ensure no section is omitted. Avoid generic filler.
+    `;
+  } else {
+    prompt = `
+      You are a Senior Amazon Growth Strategist specializing in Market Dominance. 
+      You are performing a DEEP ${toolType.toUpperCase().replace('_', ' ')} audit.
+      STRICT COMPLIANCE: DO NOT include any 'thinking' tags, <think> blocks, or internal reasoning in your output. Start the report immediately. Use data-driven analysis based ON THE PROVIDED INPUT.
+
+      INPUT DATA:
+      - PRIMARY PRODUCT: ${myListing.title} (Price: ${myListing.price})
+      - COMPETITORS: ${competitorListings.map(c => `${c.title} (Price: ${c.price}, Link: ${c.url})`).join(" | ")}
+      - EXTERNAL CONTEXT: ${additionalGoals || "None provided"}
+      - TARGET KEYWORDS: ${currentKeywords || "Generate from industry standards"}
+      - HELIUM10/RAW DATA: ${uploadedKeywords || "None provided"}
+      
+      ${visualBriefOptions?.brandAesthetic ? `BRAND AESTHETIC: ${visualBriefOptions.brandAesthetic}` : ""}
+      ${visualBriefOptions?.emotionalHook ? `EMOTIONAL HOOK: ${visualBriefOptions.emotionalHook}` : ""}
+      ${visualBriefOptions?.directPrompt ? `SPECIAL USER DIRECTIVE: ${visualBriefOptions.directPrompt}` : ""}
+
+      REQUIREMENTS FOR THE OUTPUT (MUST BE HIGH-IMPACT, CONCISE, AND POSSESS AN ELITE PROFESSIONAL TONE):
+      1. EXECUTIVE SUMMARY & GROWTH INSIGHT (Max 150 words): A sharp strategic overview highlighting our core "Growth Gap" vs competitors and our top market opportunity.
+      2. TARGETED COMPETITIVE MATRIX: A clean grid/table comparing us with the top competitors. Analyze Price Positioning, Key USP, Visual conversion assets, and SEO Quality.
+         - CRITICAL: For the "Competitor Link" column, you MUST use the exact, literal URL provided in the input data for that specific competitor. DO NOT modify, shorten, or hallucinate a link structure. If no link is provided for a competitor, use "N/A".
+      3. THE PERSUASION TRIGGER (Max 100 words): A concise profile of the target customer Avatar's core psychological trigger and visceral frustration.
+      4. STRATEGIC KEYWORD ASSIGNMENT: Recommend 8-10 high-value keywords categorized by Search Intent (Acquisition, Browsing, Competitor Conquest) with realistic industry-benchmark search volumes.
+      5. AGILE S.W.O.T ANALYSIS: A crisp, point-by-point deconstruction of Strengths, Weaknesses, Opportunities, and Threats for our listing copy and visuals.
+      6. THE "WINNING FORMULA" 14-DAY ACTION PLAN: Exactly 3-4 highly specific, immediate CRO (Conversion Rate Optimization) action steps.
+
+      Use strict GFM Markdown. Keep sections concise, high-density, and heavily structured using Bold, Italics, and a neat Table to make it look like an elite, high-value tactical report while remaining token-efficient.
+      BE DIRECT. If data is missing, use expert knowledge and category benchmarks to supply realistic estimates. NEVER use placeholders like "[Insert Data Here]".
+    `;
+  }
 
   const result = await callAiBackend({ action: "analyze", prompt });
   return result.text;

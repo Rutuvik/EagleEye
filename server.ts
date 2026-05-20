@@ -40,16 +40,10 @@ async function startServer() {
       const groq = getGroq();
       let response;
       
-      // Smart Routing: simple tasks use llama-3.1-8b-instant, complex structured tasks use openai/gpt-oss-20b
-      let model = requestedModel;
-      if (!model) {
-        if (images && images.length > 0) {
-          model = "llama-3.2-90b-vision-preview";
-        } else if (action === "chat") {
-          model = "llama-3.1-8b-instant";
-        } else {
-          model = "openai/gpt-oss-20b";
-        }
+      // Smart Routing: default to llama-3.3-70b-versatile, use llama-3.2-90b-vision-preview for vision/images
+      let model = "llama-3.3-70b-versatile";
+      if (action === "vision" || (images && images.length > 0)) {
+        model = "llama-3.2-90b-vision-preview";
       }
 
       // Safe truncation to handle Groq's low TPM/Payload limits on the free tier
@@ -75,40 +69,82 @@ async function startServer() {
         finalMessages = [{ role: "user", content: truncatedPrompt }];
       }
 
+      // Smart Fallback Runner to handle API failures / Rate Limits dynamically
+      async function executeGroqWithFallback(options: any, initialModel: string) {
+        const fallbackQueue = [
+          initialModel,
+          "llama-3.1-8b-instant"
+        ];
+        
+        // Remove duplicates and ensure only valid strings are kept
+        const uniqueQueue = Array.from(new Set(fallbackQueue.filter(Boolean)));
+        let lastError: any = null;
+        
+        for (const modelToTry of uniqueQueue) {
+          try {
+            console.log(`[AI Routing] Dispatching request using model: ${modelToTry}`);
+            let sanitizedOptions = { ...options };
+            const isVisionModel = modelToTry.includes("vision");
+            if (!isVisionModel && sanitizedOptions.messages) {
+              sanitizedOptions.messages = sanitizedOptions.messages.map((msg: any) => {
+                if (Array.isArray(msg.content)) {
+                  const textParts = msg.content
+                    .filter((part: any) => part.type === "text")
+                    .map((part: any) => part.text)
+                    .join("\n");
+                  return { ...msg, content: textParts };
+                }
+                return msg;
+              });
+            }
+
+            const result = await groq.chat.completions.create({
+              ...sanitizedOptions,
+              model: modelToTry
+            });
+            console.log(`[AI Routing] Success with model: ${modelToTry}`);
+            return result;
+          } catch (err: any) {
+            console.error(`[AI Routing] Fail with model ${modelToTry}: ${err.message || err}`);
+            lastError = err;
+          }
+        }
+        throw lastError;
+      }
+
       if (action === "chat") {
-        response = await groq.chat.completions.create({
-          model,
+        response = await executeGroqWithFallback({
           messages: finalMessages,
           temperature: 0.7,
           max_completion_tokens: 4096,
           top_p: 1,
           stream: false,
-        });
+        }, model);
       } else if (action === "vision") {
-        // Handle images in vision model
+        // Construct visual message payload with inline image objects
         const content = [
-          { type: "text", text: prompt.substring(0, 5000) }, // Keep prompt reasonable for vision
-          ...images.slice(0, 4).map((img: any) => ({ // Groq vision limit often 4-5 images
+          { type: "text", text: prompt.substring(0, 5000) }
+        ];
+        if (images && images.length > 0) {
+          content.push(...images.slice(0, 4).map((img: any) => ({
             type: "image_url",
             image_url: { url: `data:${img.mimeType};base64,${img.data}` }
-          }))
-        ];
+          })));
+        }
 
-        response = await groq.chat.completions.create({
-          model: "llama-3.2-90b-vision-preview",
+        response = await executeGroqWithFallback({
           messages: [{ role: "user", content: content as any }],
           temperature: 0.5,
           max_completion_tokens: 4096,
           response_format: { type: "json_object" },
-        });
+        }, model);
       } else {
-        response = await groq.chat.completions.create({
-          model,
+        response = await executeGroqWithFallback({
           messages: finalMessages,
           temperature: 0.5,
           max_completion_tokens: 4096,
           response_format: requestedModel === "json" || action === "json" ? { type: "json_object" } : undefined,
-        });
+        }, model);
       }
 
       res.json({ text: stripThinkingTags(response.choices[0].message.content) });
