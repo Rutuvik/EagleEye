@@ -1,6 +1,6 @@
 {
   "name": "Remix: Final Eagle Eye 2.0",
-  "description": "Elite Amazon Marketplace Intelligence engine powered by llama-3.3-70b-versatile to deliver deep tactical audits, SEO optimization, and visual conversion strategy.",
+  "description": "Elite Amazon Marketplace Intelligence engine powered by a dual-model setup (Llama 3.1 8B and GPT-OSS 20B) to deliver deep tactical audits, SEO optimization, and rapid conversational strategy.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

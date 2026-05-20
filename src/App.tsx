@@ -609,12 +609,16 @@ export default function App() {
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        extractedText = json.map((row: any) => row.join(', ')).join('\n');
+        // Limit keyword sheet parsing to the first 150 rows to keep contextual query sizes within standard API bounds
+        const limitedJson = json.slice(0, 150);
+        extractedText = limitedJson.map((row: any) => row.join(', ')).join('\n');
       } else if (fileType === 'pdf') {
         const data = await file.arrayBuffer();
         const pdf = await pdfjs.getDocument({ data }).promise;
         let fullText = "";
-        for (let i = 1; i <= pdf.numPages; i++) {
+        // Limit PDF to first 8 pages
+        const pagesToParse = Math.min(pdf.numPages, 8);
+        for (let i = 1; i <= pagesToParse; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
           const pageText = textContent.items.map((item: any) => item.str).join(' ');
@@ -625,6 +629,11 @@ export default function App() {
         extractedText = await file.text();
       } else {
         throw new Error("Unsupported file type. Please upload CSV, Excel, PDF, or TXT.");
+      }
+
+      // Safeguard total compiled character input to prevent payload limits
+      if (extractedText.length > 20000) {
+        extractedText = extractedText.substring(0, 20000) + "\n\n...[Truncated for context efficiency]...";
       }
 
       setUploadedKeywords(prev => prev ? prev + "\n" + extractedText : extractedText);
@@ -638,22 +647,63 @@ export default function App() {
     }
   };
 
+  // Helper utility to compress images cleanly using canvas on the client-side
+  const compressImage = (file: File, maxWidth = 400, maxHeight = 400, quality = 0.4): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(event.target?.result as string);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.onerror = () => {
+          resolve(event.target?.result as string);
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = () => {
+        resolve("");
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'my' | 'comp') => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     const newImages = await Promise.all(files.map(async (file) => {
-      return new Promise<{ file: File; preview: string; base64: string }>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          resolve({
-            file,
-            preview: URL.createObjectURL(file),
-            base64: reader.result as string
-          });
-        };
-        reader.readAsDataURL(file);
-      });
+      const compressedBase64 = await compressImage(file);
+      return {
+        file,
+        preview: URL.createObjectURL(file),
+        base64: compressedBase64
+      };
     }));
 
     if (type === 'my') {
@@ -1701,12 +1751,12 @@ export default function App() {
                             Market Strengths
                           </h4>
                           <ul className="space-y-2">
-                            {competitorResearch.pros.map((pro, idx) => (
+                            {Array.isArray(competitorResearch.pros) ? competitorResearch.pros.map((pro, idx) => (
                               <li key={`research-pro-${idx}`} className="text-sm flex gap-2 text-slate-400">
                                 <span className="text-green-500 font-bold">•</span>
-                                {pro}
+                                {typeof pro === 'object' ? JSON.stringify(pro) : String(pro)}
                               </li>
-                            ))}
+                            )) : null}
                           </ul>
                         </div>
 
@@ -1716,12 +1766,12 @@ export default function App() {
                             Market Weaknesses
                           </h4>
                           <ul className="space-y-2">
-                            {competitorResearch.cons.map((con, idx) => (
+                            {Array.isArray(competitorResearch.cons) ? competitorResearch.cons.map((con, idx) => (
                               <li key={`research-con-${idx}`} className="text-sm flex gap-2 text-slate-400">
                                 <span className="text-red-500 font-bold">•</span>
-                                {con}
+                                {typeof con === 'object' ? JSON.stringify(con) : String(con)}
                               </li>
-                            ))}
+                            )) : null}
                           </ul>
                         </div>
                       </div>
@@ -1760,11 +1810,14 @@ export default function App() {
                             Keywords Winning
                           </h4>
                           <div className="flex flex-wrap gap-2">
-                            {competitorResearch.keywordAnalysis.good.map((kw, i) => (
-                              <span key={`kw-good-${kw.replace(/\s+/g, '-')}-${i}`} className="px-2 py-1 bg-green-900/30 border border-green-800 rounded text-[10px] text-green-400 font-medium">
-                                {kw}
-                              </span>
-                            ))}
+                            {competitorResearch.keywordAnalysis && Array.isArray(competitorResearch.keywordAnalysis.good) ? competitorResearch.keywordAnalysis.good.map((kw, i) => {
+                              const kwStr = typeof kw === 'object' ? JSON.stringify(kw) : String(kw);
+                              return (
+                                <span key={`kw-good-${i}-${kwStr.substring(0, 20).replace(/[^a-zA-Z0-9-]/g, '-')}`} className="px-2 py-1 bg-green-900/30 border border-green-800 rounded text-[10px] text-green-400 font-medium">
+                                  {kwStr}
+                                </span>
+                              );
+                            }) : null}
                           </div>
                         </div>
                         <div className="space-y-3">
@@ -1773,11 +1826,14 @@ export default function App() {
                             Keywords Missing/Weak
                           </h4>
                           <div className="flex flex-wrap gap-2">
-                            {competitorResearch.keywordAnalysis.bad.map((kw, i) => (
-                              <span key={`kw-bad-${kw.replace(/\s+/g, '-')}-${i}`} className="px-2 py-1 bg-red-900/30 border border-red-800 rounded text-[10px] text-red-400 font-medium">
-                                {kw}
-                              </span>
-                            ))}
+                            {competitorResearch.keywordAnalysis && Array.isArray(competitorResearch.keywordAnalysis.bad) ? competitorResearch.keywordAnalysis.bad.map((kw, i) => {
+                              const kwStr = typeof kw === 'object' ? JSON.stringify(kw) : String(kw);
+                              return (
+                                <span key={`kw-bad-${i}-${kwStr.substring(0, 20).replace(/[^a-zA-Z0-9-]/g, '-')}`} className="px-2 py-1 bg-red-900/30 border border-red-800 rounded text-[10px] text-red-400 font-medium">
+                                  {kwStr}
+                                </span>
+                              );
+                            }) : null}
                           </div>
                         </div>
                       </div>
@@ -1815,7 +1871,17 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         <button 
                           onClick={() => {
-                            const text = `TITLE (Selected Option ${selectedTitleIndex + 1}):\n${optimizedListing.titles[selectedTitleIndex].text}\n\nALL TITLE OPTIONS:\n${optimizedListing.titles.map((t, i) => `Option ${i+1} (Score: ${t.score}): ${t.text}`).join('\n')}\n\nBULLETS:\n${optimizedListing.bulletPoints.map(b => `[Score: ${b.score}] ${b.text}`).join('\n')}\n\nDESCRIPTION:\n${optimizedListing.description}\n\nSEARCH TERMS:\n${optimizedListing.searchTerms}\n\nOVERALL LISTING SCORE: ${optimizedListing.overallListingScore}`;
+                            const titlesList = Array.isArray(optimizedListing.titles) 
+                              ? optimizedListing.titles.map((t, i) => `Option ${i+1} (Score: ${t?.score || 80}): ${t?.text || ''}`).join('\n')
+                              : '';
+                            const bulletPts = Array.isArray(optimizedListing.bulletPoints)
+                              ? optimizedListing.bulletPoints.map(b => `[Score: ${b?.score || 85}] ${b?.text || ''}`).join('\n')
+                              : '';
+                            const selectedTitleText = Array.isArray(optimizedListing.titles) && optimizedListing.titles[selectedTitleIndex]
+                              ? optimizedListing.titles[selectedTitleIndex].text
+                              : '';
+
+                            const text = `TITLE (Selected Option ${selectedTitleIndex + 1}):\n${selectedTitleText}\n\nALL TITLE OPTIONS:\n${titlesList}\n\nBULLETS:\n${bulletPts}\n\nDESCRIPTION:\n${optimizedListing.description || ''}\n\nSEARCH TERMS:\n${optimizedListing.searchTerms || ''}\n\nOVERALL LISTING SCORE: ${optimizedListing.overallListingScore || 0}`;
                             navigator.clipboard.writeText(text);
                             setCopied(true);
                             setTimeout(() => setCopied(false), 2000);
@@ -1831,64 +1897,74 @@ export default function App() {
                       <div className="space-y-4">
                         <h3 className="text-[10px] font-bold text-orange-600">Title Options (Top 5)</h3>
                         <div className="space-y-3">
-                          {optimizedListing.titles.map((title, idx) => (
-                            <button
-                              key={`title-option-${title.text.substring(0, 20).replace(/\s+/g, '-')}-${idx}`}
-                              onClick={() => setSelectedTitleIndex(idx)}
-                              className={cn(
-                                "w-full text-left p-4 rounded-xl border transition-all relative group/item",
-                                selectedTitleIndex === idx 
-                                  ? "bg-orange-900/20 border-orange-800 text-white" 
-                                  : "bg-slate-800 border-slate-700 text-slate-500 hover:border-slate-600"
-                              )}
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <span className={cn(
-                                  "text-[10px] font-bold px-2 py-0.5 rounded",
-                                  selectedTitleIndex === idx ? "bg-orange-600 text-white" : "bg-slate-700 text-slate-400"
-                                )}>
-                                  Option 0{idx + 1}
-                                </span>
-                                <div className="flex items-center gap-3">
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
-                                      <div 
-                                        className="h-full bg-orange-500" 
-                                        style={{ width: `${title.score}%` }}
-                                      />
+                          {Array.isArray(optimizedListing.titles) ? optimizedListing.titles.map((title, idx) => {
+                            if (!title) return null;
+                            const titleText = typeof title.text === 'string' ? title.text : JSON.stringify(title);
+                            const scoreVal = typeof title.score === 'number' ? title.score : 80;
+                            return (
+                              <button
+                                key={`title-option-${idx}-${titleText.substring(0, 15).replace(/[^a-zA-Z0-9-]/g, '-')}`}
+                                onClick={() => setSelectedTitleIndex(idx)}
+                                className={cn(
+                                  "w-full text-left p-4 rounded-xl border transition-all relative group/item",
+                                  selectedTitleIndex === idx 
+                                    ? "bg-orange-900/20 border-orange-800 text-white" 
+                                    : "bg-slate-800 border-slate-700 text-slate-500 hover:border-slate-600"
+                                )}
+                              >
+                                <div className="flex justify-between items-start mb-2">
+                                  <span className={cn(
+                                    "text-[10px] font-bold px-2 py-0.5 rounded",
+                                    selectedTitleIndex === idx ? "bg-orange-600 text-white" : "bg-slate-700 text-slate-400"
+                                  )}>
+                                    Option 0{idx + 1}
+                                  </span>
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
+                                        <div 
+                                          className="h-full bg-orange-500" 
+                                          style={{ width: `${scoreVal}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-[9px] font-bold text-orange-600">{scoreVal}</span>
                                     </div>
-                                    <span className="text-[9px] font-bold text-orange-600">{title.score}</span>
+                                    <span className="text-[9px] opacity-40">{titleText.length}/200 chars</span>
                                   </div>
-                                  <span className="text-[9px] opacity-40">{title.text.length}/200 chars</span>
                                 </div>
-                              </div>
-                              <p className="text-sm font-medium leading-relaxed text-slate-200">{title.text}</p>
-                              {selectedTitleIndex === idx && (
-                                <div className="absolute top-2 right-2">
-                                  <CheckCircle2 className="w-4 h-4 text-orange-600" />
-                                </div>
-                              )}
-                            </button>
-                          ))}
+                                <p className="text-sm font-medium leading-relaxed text-slate-200">{titleText}</p>
+                                {selectedTitleIndex === idx && (
+                                  <div className="absolute top-2 right-2">
+                                    <CheckCircle2 className="w-4 h-4 text-orange-600" />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          }) : null}
                         </div>
                       </div>
 
                       <div className="space-y-4">
                         <h3 className="text-[10px] font-bold text-blue-600">High-Conversion Bullet Points</h3>
                         <div className="space-y-3">
-                          {optimizedListing.bulletPoints.map((bullet, idx) => (
-                            <div key={`bullet-point-${bullet.text.substring(0, 20).replace(/\s+/g, '-')}-${idx}`} className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-sm flex gap-4 text-slate-300 relative overflow-hidden group">
-                              <div 
-                                className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-400/30 group-hover:bg-orange-600 transition-all" 
-                                style={{ height: `${bullet.score}%` }}
-                              />
-                              <div className="flex flex-col items-center gap-1 min-w-[32px]">
-                                <span className="text-orange-600 font-bold mt-0.5">0{idx + 1}</span>
-                                <span className="text-[8px] font-bold text-orange-600/60">{bullet.score}</span>
+                          {Array.isArray(optimizedListing.bulletPoints) ? optimizedListing.bulletPoints.map((bullet, idx) => {
+                            if (!bullet) return null;
+                            const bulletText = typeof bullet.text === 'string' ? bullet.text : JSON.stringify(bullet);
+                            const bulletScore = typeof bullet.score === 'number' ? bullet.score : 85;
+                            return (
+                              <div key={`bullet-point-${idx}-${bulletText.substring(0, 15).replace(/[^a-zA-Z0-9-]/g, '-')}`} className="bg-slate-800 border border-slate-700 p-4 rounded-xl text-sm flex gap-4 text-slate-300 relative overflow-hidden group">
+                                <div 
+                                  className="absolute left-0 top-0 bottom-0 w-0.5 bg-orange-400/30 group-hover:bg-orange-600 transition-all" 
+                                  style={{ height: `${bulletScore}%` }}
+                                />
+                                <div className="flex flex-col items-center gap-1 min-w-[32px]">
+                                  <span className="text-orange-600 font-bold mt-0.5">0{idx + 1}</span>
+                                  <span className="text-[8px] font-bold text-orange-600/60">{bulletScore}</span>
+                                </div>
+                                <p className="leading-relaxed">{bulletText}</p>
                               </div>
-                              <p className="leading-relaxed">{bullet.text}</p>
-                            </div>
-                          ))}
+                            );
+                          }) : null}
                         </div>
                       </div>
 
@@ -1909,12 +1985,17 @@ export default function App() {
                       <div className="space-y-4 pt-4 border-t border-slate-800">
                         <h3 className="text-[10px] font-bold text-orange-600">Keyword Rationale</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {optimizedListing.keywordRationale.map((item, idx) => (
-                            <div key={`keyword-rationale-${item.term.replace(/\s+/g, '-')}-${idx}`} className="bg-slate-800 border border-slate-700 p-4 rounded-xl">
-                              <div className="text-xs font-bold text-orange-600 mb-1">{item.term}</div>
-                              <p className="text-[11px] opacity-60 leading-relaxed">{item.reason}</p>
-                            </div>
-                          ))}
+                          {Array.isArray(optimizedListing.keywordRationale) ? optimizedListing.keywordRationale.map((item, idx) => {
+                            if (!item) return null;
+                            const itemTerm = typeof item.term === 'string' ? item.term : (item as any).keyword || 'Keyword';
+                            const itemReason = typeof item.reason === 'string' ? item.reason : JSON.stringify(item);
+                            return (
+                              <div key={`keyword-rationale-${idx}-${itemTerm.replace(/[^a-zA-Z0-9-]/g, '-')}`} className="bg-slate-800 border border-slate-700 p-4 rounded-xl">
+                                <div className="text-xs font-bold text-orange-600 mb-1">{itemTerm}</div>
+                                <p className="text-[11px] opacity-60 leading-relaxed">{itemReason}</p>
+                              </div>
+                            );
+                          }) : null}
                         </div>
                       </div>
                     </div>
@@ -1922,7 +2003,17 @@ export default function App() {
                     <div className="pt-6 border-t border-slate-800 flex justify-center gap-4 relative z-10">
                       <button 
                         onClick={() => {
-                          const text = `TITLE (Selected Option ${selectedTitleIndex + 1}):\n${optimizedListing.titles[selectedTitleIndex].text}\n\nALL TITLE OPTIONS:\n${optimizedListing.titles.map((t, i) => `Option ${i+1} (Score: ${t.score}): ${t.text}`).join('\n')}\n\nBULLETS:\n${optimizedListing.bulletPoints.map(b => `[Score: ${b.score}] ${b.text}`).join('\n')}\n\nDESCRIPTION:\n${optimizedListing.description}\n\nSEARCH TERMS:\n${optimizedListing.searchTerms}\n\nOVERALL LISTING SCORE: ${optimizedListing.overallListingScore}`;
+                          const titlesList = Array.isArray(optimizedListing.titles) 
+                            ? optimizedListing.titles.map((t, i) => `Option ${i+1} (Score: ${t?.score || 80}): ${t?.text || ''}`).join('\n')
+                            : '';
+                          const bulletPts = Array.isArray(optimizedListing.bulletPoints)
+                            ? optimizedListing.bulletPoints.map(b => `[Score: ${b?.score || 85}] ${b?.text || ''}`).join('\n')
+                            : '';
+                          const selectedTitleText = Array.isArray(optimizedListing.titles) && optimizedListing.titles[selectedTitleIndex]
+                            ? optimizedListing.titles[selectedTitleIndex].text
+                            : '';
+
+                          const text = `TITLE (Selected Option ${selectedTitleIndex + 1}):\n${selectedTitleText}\n\nALL TITLE OPTIONS:\n${titlesList}\n\nBULLETS:\n${bulletPts}\n\nDESCRIPTION:\n${optimizedListing.description || ''}\n\nSEARCH TERMS:\n${optimizedListing.searchTerms || ''}\n\nOVERALL LISTING SCORE: ${optimizedListing.overallListingScore || 0}`;
                           navigator.clipboard.writeText(text);
                           setCopied(true);
                           setTimeout(() => setCopied(false), 2000);
@@ -1984,46 +2075,63 @@ export default function App() {
                         </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {visualAudit.imageOptimizationPlan.map((img, idx) => (
-                            <div key={`visual-asset-plan-${img.title.replace(/\s+/g, '-')}-${idx}`} className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden space-y-3 group hover:border-blue-600 transition-all">
-                              <div className="aspect-square bg-slate-900 relative">
-                                <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
-                                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold mb-2">
-                                    {img.imageNumber}
+                          {Array.isArray(visualAudit.imageOptimizationPlan) ? visualAudit.imageOptimizationPlan.map((img, idx) => {
+                            if (!img) return null;
+                            const imgTitle = typeof img.title === 'string' ? img.title : 'Creative Image';
+                            const imgDesc = typeof img.description === 'string' ? img.description : '';
+                            const imgWins = typeof img.whyItWins === 'string' ? img.whyItWins : '';
+                            const imgNum = typeof img.imageNumber === 'number' ? img.imageNumber : idx + 1;
+                            return (
+                              <div key={`visual-asset-plan-${idx}-${imgTitle.replace(/[^a-zA-Z0-9-]/g, '-')}`} className="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden space-y-3 group hover:border-blue-600 transition-all">
+                                <div className="aspect-square bg-slate-900 relative">
+                                  <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
+                                    <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-500 font-bold mb-2">
+                                      {imgNum}
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Visual Concept</span>
                                   </div>
-                                  <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Visual Concept</span>
+                                  <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[9px] font-bold text-white border border-white/10">
+                                    IMAGE 0{imgNum}
+                                  </div>
                                 </div>
-                                <div className="absolute top-3 left-3 px-2 py-1 bg-black/60 backdrop-blur-md rounded-lg text-[9px] font-bold text-white border border-white/10">
-                                  IMAGE 0{img.imageNumber}
+                                <div className="p-5 space-y-3">
+                                  <h5 className="font-bold text-white text-sm">{imgTitle}</h5>
+                                  <p className="text-[11px] text-slate-400 leading-relaxed">{imgDesc}</p>
+                                  <div className="pt-2 border-t border-slate-700">
+                                    <p className="text-[9px] font-bold text-blue-400 italic uppercase tracking-tight">WHY IT WINS: {imgWins}</p>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="p-5 space-y-3">
-                                <h5 className="font-bold text-white text-sm">{img.title}</h5>
-                                <p className="text-[11px] text-slate-400 leading-relaxed">{img.description}</p>
-                                <div className="pt-2 border-t border-slate-700">
-                                  <p className="text-[9px] font-bold text-blue-400 italic uppercase tracking-tight">WHY IT WINS: {img.whyItWins}</p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          }) : null}
                         </div>
                       </div>
 
                       <div className="space-y-4 pt-6 border-t border-slate-800">
                         <h4 className="text-xs font-bold text-green-600 uppercase tracking-widest">Visual Conversion Triggers</h4>
                         <div className="flex flex-wrap gap-2">
-                          {visualAudit.conversionTriggers.map((trigger, i) => (
-                            <span key={`visual-trigger-${i}`} className="px-3 py-1.5 bg-green-900/20 border border-green-800/50 rounded-full text-[10px] text-green-400 font-bold">
-                              {trigger}
-                            </span>
-                          ))}
+                          {Array.isArray(visualAudit.conversionTriggers) ? visualAudit.conversionTriggers.map((trigger, i) => {
+                            const triggerStr = typeof trigger === 'string' ? trigger : JSON.stringify(trigger);
+                            return (
+                              <span key={`visual-trigger-${i}-${triggerStr.substring(0, 15).replace(/[^a-zA-Z0-9-]/g, '-')}`} className="px-3 py-1.5 bg-green-900/20 border border-green-800/50 rounded-full text-[10px] text-green-400 font-bold">
+                                {triggerStr}
+                              </span>
+                            );
+                          }) : null}
                         </div>
                       </div>
 
                       <div className="pt-6 flex justify-center">
                         <button 
                           onClick={() => {
-                            const text = `VISUAL AUDIT REPORT\n\nOUR STRATEGY:\n${visualAudit.myVisualStrategy}\n\nCOMPETITOR SECRETS:\n${visualAudit.competitorVisualStrategy}\n\nGAP ANALYSIS:\n${visualAudit.gapAnalysis}\n\nOPTIMIZATION PLAN:\n${visualAudit.imageOptimizationPlan.map(img => `Image ${img.imageNumber}: ${img.title}\n${img.description}\nWhy it wins: ${img.whyItWins}`).join('\n\n')}\n\nCONVERSION TRIGGERS:\n${visualAudit.conversionTriggers.join(', ')}`;
+                            const planList = Array.isArray(visualAudit.imageOptimizationPlan)
+                              ? visualAudit.imageOptimizationPlan.map(img => `Image ${img?.imageNumber || ''}: ${img?.title || ''}\n${img?.description || ''}\nWhy it wins: ${img?.whyItWins || ''}`).join('\n\n')
+                              : '';
+                            const triggersList = Array.isArray(visualAudit.conversionTriggers)
+                              ? visualAudit.conversionTriggers.join(', ')
+                              : '';
+
+                            const text = `VISUAL AUDIT REPORT\n\nOUR STRATEGY:\n${visualAudit.myVisualStrategy || ''}\n\nCOMPETITOR SECRETS:\n${visualAudit.competitorVisualStrategy || ''}\n\nGAP ANALYSIS:\n${visualAudit.gapAnalysis || ''}\n\nOPTIMIZATION PLAN:\n${planList}\n\nCONVERSION TRIGGERS:\n${triggersList}`;
                             navigator.clipboard.writeText(text);
                             setCopied(true);
                             setTimeout(() => setCopied(false), 2000);

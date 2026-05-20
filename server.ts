@@ -39,9 +39,20 @@ async function startServer() {
     try {
       const groq = getGroq();
       let response;
-      const model = images && images.length > 0 ? "llama-3.2-90b-vision-preview" : (requestedModel || "llama-3.3-70b-versatile");
+      
+      // Smart Routing: simple tasks use llama-3.1-8b-instant, complex structured tasks use openai/gpt-oss-20b
+      let model = requestedModel;
+      if (!model) {
+        if (images && images.length > 0) {
+          model = "llama-3.2-90b-vision-preview";
+        } else if (action === "chat") {
+          model = "llama-3.1-8b-instant";
+        } else {
+          model = "openai/gpt-oss-20b";
+        }
+      }
 
-      // Simple truncation to handle Groq's low TPM/Payload limits on the free tier
+      // Safe truncation to handle Groq's low TPM/Payload limits on the free tier
       const maxChars = 24000; // Approx 6000 tokens
       
       let finalMessages = messages || [];

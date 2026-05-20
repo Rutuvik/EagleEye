@@ -242,17 +242,17 @@ export async function analyzeListing(
     ${visualBriefOptions?.emotionalHook ? `EMOTIONAL HOOK: ${visualBriefOptions.emotionalHook}` : ""}
     ${visualBriefOptions?.directPrompt ? `SPECIAL USER DIRECTIVE: ${visualBriefOptions.directPrompt}` : ""}
 
-    REQUIREMENTS FOR THE OUTPUT (MUST BE EXHAUSTIVE, DETAILED, AND POSSESS AN ELITE PROFESSIONAL TONE):
-    1. EXECUTIVE SUMMARY: A high-level, 400+ word deep-dive strategic analysis. Evaluate the market dominance opportunity, tactical vulnerabilities of incumbents, and our precise "Growth Gap". Use complex market vocabulary and avoid common phrasing.
-    2. COMPETITIVE LANDSCAPE: A highly detailed table comparing us to the top 3-5 competitors. Analyze Price elasticity, Review velocity, unique value propositions (USPs), SEO technical quality, visual conversion strategy. 
-       - CRITICAL: For the "Competitor Link" column, you MUST use the exact, literal URL provided in the input data for that specific competitor. DO NOT modify, shorten, or hallucinate a link structure. If no link is provided for a competitor, leave it blank or use "N/A".
-    3. PSYCHOGRAPHIC MAPPING: Create a master-level "Customer Avatar" profile (250+ words). Map out subconscious lifestyle triggers, visceral frustrations, aspirational goals, and the precise emotional frequency required for conversion.
-    4. KEYWORD GAPS: Identify 30-40 targeted keywords. Categorize by search intent (High-Intent Acquisition, Informational Browsing, Competitive Theft). Include search volume estimates based on industry benchmarks.
-    5. SEO S.W.O.T ANALYSIS: An uncompromising deconstruction of Strengths, Weaknesses, Opportunities, and Threats for both copy and visual conversion assets.
-    6. THE "WINNING FORMULA": provide a 30-day "Blitz" action plan. Include precise PPC bidding methodologies, social architecture for social proof, and CRO (Conversion Rate Optimization) hacks.
+    REQUIREMENTS FOR THE OUTPUT (MUST BE HIGH-IMPACT, CONCISE, AND POSSESS AN ELITE PROFESSIONAL TONE):
+    1. EXECUTIVE SUMMARY & GROWTH INSIGHT (Max 150 words): A sharp strategic overview highlighting our core "Growth Gap" vs competitors and our top market opportunity.
+    2. TARGETED COMPETITIVE MATRIX: A clean grid/table comparing us with the top competitors. Analyze Price Positioning, Key USP, Visual conversion assets, and SEO Quality.
+       - CRITICAL: For the "Competitor Link" column, you MUST use the exact, literal URL provided in the input data for that specific competitor. DO NOT modify, shorten, or hallucinate a link structure. If no link is provided for a competitor, use "N/A".
+    3. THE PERSUASION TRIGGER (Max 100 words): A concise profile of the target customer Avatar's core psychological trigger and visceral frustration.
+    4. STRATEGIC KEYWORD ASSIGNMENT: Recommend 8-10 high-value keywords categorized by Search Intent (Acquisition, Browsing, Competitor Conquest) with realistic industry-benchmark search volumes.
+    5. AGILE S.W.O.T ANALYSIS: A crisp, point-by-point deconstruction of Strengths, Weaknesses, Opportunities, and Threats for our listing copy and visuals.
+    6. THE "WINNING FORMULA" 14-DAY ACTION PLAN: Exactly 3-4 highly specific, immediate CRO (Conversion Rate Optimization) action steps.
 
-    Use strict GFM Markdown. Use Bold, Italics, and complex Tables to make it look like a $5,000 professional audit report. 
-    BE EXHAUSTIVE. If data is missing (e.g. competitor conversion rates), use your expert knowledge of the industry and category benchmarks to provide HIGHLY PROBABLE and ACCURATE industry-standard estimates. NEVER use placeholders like "[Insert Data Here]". Always fill in the gaps with realistic expert data.
+    Use strict GFM Markdown. Keep sections concise, high-density, and heavily structured using Bold, Italics, and a neat Table to make it look like an elite, high-value tactical report while remaining token-efficient.
+    BE DIRECT. If data is missing, use expert knowledge and category benchmarks to supply realistic estimates. NEVER use placeholders like "[Insert Data Here]".
   `;
 
   const result = await callAiBackend({ action: "analyze", prompt });
