@@ -41,10 +41,33 @@ async function startServer() {
       let response;
       const model = images && images.length > 0 ? "llama-3.2-90b-vision-preview" : (requestedModel || "llama-3.3-70b-versatile");
 
+      // Simple truncation to handle Groq's low TPM/Payload limits on the free tier
+      const maxChars = 24000; // Approx 6000 tokens
+      
+      let finalMessages = messages || [];
+      if (action === "chat") {
+        let currentChars = 0;
+        const truncated = [];
+        for (let i = finalMessages.length - 1; i >= 0; i--) {
+          const m = finalMessages[i];
+          const len = typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length;
+          if (currentChars + len < maxChars) {
+            truncated.unshift(m);
+            currentChars += len;
+          } else {
+            break;
+          }
+        }
+        finalMessages = truncated;
+      } else if (prompt) {
+        const truncatedPrompt = prompt.length > maxChars ? prompt.substring(0, maxChars) + "... [truncated due to length constraints]" : prompt;
+        finalMessages = [{ role: "user", content: truncatedPrompt }];
+      }
+
       if (action === "chat") {
         response = await groq.chat.completions.create({
           model,
-          messages: messages || [],
+          messages: finalMessages,
           temperature: 0.7,
           max_completion_tokens: 4096,
           top_p: 1,
@@ -53,8 +76,8 @@ async function startServer() {
       } else if (action === "vision") {
         // Handle images in vision model
         const content = [
-          { type: "text", text: prompt },
-          ...images.map((img: any) => ({
+          { type: "text", text: prompt.substring(0, 5000) }, // Keep prompt reasonable for vision
+          ...images.slice(0, 4).map((img: any) => ({ // Groq vision limit often 4-5 images
             type: "image_url",
             image_url: { url: `data:${img.mimeType};base64,${img.data}` }
           }))
@@ -70,7 +93,7 @@ async function startServer() {
       } else {
         response = await groq.chat.completions.create({
           model,
-          messages: [{ role: "user", content: prompt }],
+          messages: finalMessages,
           temperature: 0.5,
           max_completion_tokens: 4096,
           response_format: requestedModel === "json" || action === "json" ? { type: "json_object" } : undefined,
@@ -80,7 +103,16 @@ async function startServer() {
       res.json({ text: stripThinkingTags(response.choices[0].message.content) });
     } catch (error: any) {
       console.error("Groq AI Error:", error);
-      res.status(500).json({ error: error.message || "Failed to process AI request" });
+      const status = error.status || 500;
+      const message = error.message || "Failed to process AI request";
+      
+      if (status === 413 || (message.includes('rate_limit_exceeded') && message.includes('tokens'))) {
+        return res.status(413).json({ 
+          error: "The request is too large for the current AI model limit. Please reduce the length of your listing data or keywords and try again." 
+        });
+      }
+      
+      res.status(status).json({ error: message });
     }
   });
 

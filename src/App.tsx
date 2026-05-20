@@ -464,9 +464,9 @@ export default function App() {
       });
       setSelectedAnalysisId(id);
       loadHistory();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Analysis failed. Please check your data and try again.");
+      setError(err.message || "Analysis failed. Please check your data and try again.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -812,7 +812,7 @@ export default function App() {
                 ) : (
                   history.map((record, idx) => (
                     <button 
-                      key={`history-record-${record.id}-${idx}`}
+                      key={`history-row-${record.id}-${idx}-${record.createdAt?.seconds}`}
                       onClick={() => handleSelectHistory(record)}
                       className={cn(
                         "w-full text-left p-5 rounded-2xl border transition-all space-y-3 group/item relative",
@@ -1496,7 +1496,7 @@ export default function App() {
                       
                       <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                         {chatMessages.map((msg, i) => (
-                          <div key={`chat-msg-${msg.role}-${i}`} className={cn(
+                          <div key={`chat-bubble-${i}-${msg.role}-${msg.text.substring(0, 10)}`} className={cn(
                             "flex flex-col space-y-1",
                             msg.role === "user" ? "items-end" : "items-start"
                           )}>
@@ -1554,7 +1554,7 @@ export default function App() {
                           
                           {competitors.map((comp, idx) => {
                             if (!comp.url || !comp.title) return null;
-                            const uniqueKey = `btn-gen-research-opt-${comp.title.substring(0, 10).replace(/\s+/g, '-')}-${idx}`;
+                            const uniqueKey = `btn-research-opt-${idx}-${comp.title.substring(0, 10).replace(/[^a-zA-Z0-9]/g, '')}`;
                             return (
                               <button 
                                 key={uniqueKey}
@@ -1574,7 +1574,7 @@ export default function App() {
                       <div className="mt-8 pt-8 border-t border-slate-800 flex flex-wrap justify-center gap-4">
                         {competitors.map((comp, idx) => {
                           if (!comp.url || !comp.title) return null;
-                          const uniqueKey = `btn-gen-research-default-${comp.title.substring(0, 10).replace(/\s+/g, '-')}-${idx}`;
+                          const uniqueKey = `btn-research-def-${idx}-${comp.title.substring(0, 10).replace(/[^a-zA-Z0-9]/g, '')}`;
                           return (
                             <button 
                               key={uniqueKey}
