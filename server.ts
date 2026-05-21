@@ -8,13 +8,41 @@ function getGroq() {
   if (!groqClient) {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      console.warn("GROQ_API_KEY is not set. AI features will fail.");
+      console.warn("GROQ_API_KEY is not set. AI features will fail if OpenRouter is not used.");
     }
     groqClient = new Groq({
       apiKey: apiKey || "MISSING_KEY",
     });
   }
   return groqClient;
+}
+
+async function callOpenRouter(options: any, model: string) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY is not configured.");
+  }
+
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+      "HTTP-Referer": process.env.APP_URL || "https://ai.studio/build",
+      "X-Title": "Deep Listing Optimization Audit Report"
+    },
+    body: JSON.stringify({
+      ...options,
+      model: model
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+  }
+
+  return await response.json();
 }
 
 async function startServer() {
@@ -32,21 +60,20 @@ async function startServer() {
   app.post("/api/ai", async (req, res) => {
     const { action, prompt, history, messages, images, model: requestedModel } = req.body;
 
-    if (!process.env.GROQ_API_KEY) {
-      return res.status(500).json({ error: "GROQ_API_KEY is not configured in environment variables." });
+    if (!process.env.GROQ_API_KEY && !process.env.OPENROUTER_API_KEY) {
+      return res.status(500).json({ error: "Neither GROQ_API_KEY nor OPENROUTER_API_KEY is configured in environment variables." });
     }
 
     try {
-      const groq = getGroq();
       let response;
       
-      // Smart Routing: default to llama-3.3-70b-versatile, use llama-3.2-90b-vision-preview for vision/images
-      let model = "llama-3.3-70b-versatile";
+      // Smart Routing: default to deepseek-v4-flash (OpenRouter), fall back to llama-3.3-70b-versatile or llama-3.2-90b-vision-preview for vision/images
+      let model = "deepseek-v4-flash";
       if (action === "vision" || (images && images.length > 0)) {
         model = "llama-3.2-90b-vision-preview";
       }
 
-      // Safe truncation to handle Groq's low TPM/Payload limits on the free tier
+      // Safe truncation to handle low TPM/Payload limits on the free tier
       const maxChars = 24000; // Approx 6000 tokens
       
       let finalMessages = messages || [];
@@ -69,22 +96,41 @@ async function startServer() {
         finalMessages = [{ role: "user", content: truncatedPrompt }];
       }
 
-      // Smart Fallback Runner to handle API failures / Rate Limits dynamically
-      async function executeGroqWithFallback(options: any, initialModel: string) {
-        const fallbackQueue = [
-          initialModel,
-          "llama-3.1-8b-instant"
-        ];
-        
-        // Remove duplicates and ensure only valid strings are kept
-        const uniqueQueue = Array.from(new Set(fallbackQueue.filter(Boolean)));
+      // Smart Fallback Runner to handle API failures / Rate Limits dynamically across OpenRouter and Groq providers
+      async function executeAiWithFallback(options: any, initialModel: string) {
+        const queue: { provider: "openrouter" | "groq"; model: string }[] = [];
+
+        // 1. Populate with OpenRouter if configured
+        if (process.env.OPENROUTER_API_KEY) {
+          queue.push({ provider: "openrouter", model: initialModel });
+          queue.push({ provider: "openrouter", model: "deepseek/deepseek-chat" });
+          queue.push({ provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct" });
+        }
+
+        // 2. Populate with Groq as reliable backup/fallback
+        if (process.env.GROQ_API_KEY) {
+          queue.push({ provider: "groq", model: "llama-3.3-70b-versatile" });
+          queue.push({ provider: "groq", model: "llama-3.1-8b-instant" });
+        }
+
+        // De-duplicate target options
+        const uniqueQueue: { provider: "openrouter" | "groq"; model: string }[] = [];
+        const seen = new Set<string>();
+        for (const item of queue) {
+          const key = `${item.provider}:${item.model}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueQueue.push(item);
+          }
+        }
+
         let lastError: any = null;
         
-        for (const modelToTry of uniqueQueue) {
+        for (const target of uniqueQueue) {
           try {
-            console.log(`[AI Routing] Dispatching request using model: ${modelToTry}`);
+            console.log(`[AI Routing] Dispatching request using [${target.provider}] model: ${target.model}`);
             let sanitizedOptions = { ...options };
-            const isVisionModel = modelToTry.includes("vision");
+            const isVisionModel = target.model.includes("vision");
             if (!isVisionModel && sanitizedOptions.messages) {
               sanitizedOptions.messages = sanitizedOptions.messages.map((msg: any) => {
                 if (Array.isArray(msg.content)) {
@@ -98,14 +144,21 @@ async function startServer() {
               });
             }
 
-            const result = await groq.chat.completions.create({
-              ...sanitizedOptions,
-              model: modelToTry
-            });
-            console.log(`[AI Routing] Success with model: ${modelToTry}`);
-            return result;
+            if (target.provider === "openrouter") {
+              const res = await callOpenRouter(sanitizedOptions, target.model);
+              console.log(`[AI Routing] Success with OpenRouter model: ${target.model}`);
+              return res;
+            } else {
+              const groq = getGroq();
+              const res = await groq.chat.completions.create({
+                ...sanitizedOptions,
+                model: target.model
+              });
+              console.log(`[AI Routing] Success with Groq model: ${target.model}`);
+              return res;
+            }
           } catch (err: any) {
-            console.error(`[AI Routing] Fail with model ${modelToTry}: ${err.message || err}`);
+            console.error(`[AI Routing] Fail with [${target.provider}] model ${target.model}: ${err.message || err}`);
             lastError = err;
           }
         }
@@ -113,7 +166,7 @@ async function startServer() {
       }
 
       if (action === "chat") {
-        response = await executeGroqWithFallback({
+        response = await executeAiWithFallback({
           messages: finalMessages,
           temperature: 0.7,
           max_completion_tokens: 4096,
@@ -132,14 +185,14 @@ async function startServer() {
           })));
         }
 
-        response = await executeGroqWithFallback({
+        response = await executeAiWithFallback({
           messages: [{ role: "user", content: content as any }],
           temperature: 0.5,
           max_completion_tokens: 4096,
           response_format: { type: "json_object" },
         }, model);
       } else {
-        response = await executeGroqWithFallback({
+        response = await executeAiWithFallback({
           messages: finalMessages,
           temperature: 0.5,
           max_completion_tokens: 4096,
@@ -147,7 +200,8 @@ async function startServer() {
         }, model);
       }
 
-      res.json({ text: stripThinkingTags(response.choices[0].message.content) });
+      const textResponse = response.choices?.[0]?.message?.content || "";
+      res.json({ text: stripThinkingTags(textResponse) });
     } catch (error: any) {
       console.error("Groq AI Error:", error);
       const status = error.status || 500;
